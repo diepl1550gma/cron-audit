@@ -42,6 +42,20 @@ def enrich_audit_result(result: AuditResult) -> EnrichedAuditResult:
     )
 
 
+def _format_enriched_job(ej: EnrichedJob) -> List[str]:
+    """Render a single EnrichedJob as a list of indented report lines."""
+    lines = [
+        f"  Command : {ej.job.command}",
+        f"  Schedule: {ej.schedule.raw}",
+        f"  Meaning : {ej.schedule.description}",
+    ]
+    if ej.schedule.estimated_runs_per_day is not None:
+        runs = ej.schedule.estimated_runs_per_day
+        lines.append(f"  Est. runs/day: {runs:.1f}")
+    lines.append("")
+    return lines
+
+
 def format_enriched_report(results: List[EnrichedAuditResult]) -> str:
     """Render enriched audit results as a human-readable text report."""
     lines: List[str] = []
@@ -59,12 +73,6 @@ def format_enriched_report(results: List[EnrichedAuditResult]) -> str:
             continue
 
         for ej in result.enriched_jobs:
-            lines.append(f"  Command : {ej.job.command}")
-            lines.append(f"  Schedule: {ej.schedule.raw}")
-            lines.append(f"  Meaning : {ej.schedule.description}")
-            if ej.schedule.estimated_runs_per_day is not None:
-                runs = ej.schedule.estimated_runs_per_day
-                lines.append(f"  Est. runs/day: {runs:.1f}")
-            lines.append("")
+            lines.extend(_format_enriched_job(ej))
 
     return "\n".join(lines)

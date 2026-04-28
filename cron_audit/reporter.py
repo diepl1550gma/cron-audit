@@ -1,78 +1,67 @@
-"""Generate enriched audit reports with human-readable schedule descriptions."""
+"""Enriched reporting: combines audit results with schedule descriptions."""
 
-from __future__ import annotations
-
-from dataclasses import dataclass
-from typing import List
-
+from dataclasses import dataclass, field
+from typing import List, Optional
 from cron_audit.parser import CronJob
-from cron_audit.remote_audit import AuditResult
 from cron_audit.scheduler import ScheduleSummary, describe_schedule
+from cron_audit.remote_audit import AuditResult
 
 
 @dataclass
 class EnrichedJob:
-    """A CronJob paired with its schedule description."""
-
     job: CronJob
-    schedule: ScheduleSummary
+    schedule_summary: Optional[ScheduleSummary]
 
 
 @dataclass
 class EnrichedAuditResult:
-    """AuditResult with schedule descriptions attached to each job."""
-
     host: str
     success: bool
-    enriched_jobs: List[EnrichedJob]
-    error: str | None = None
+    enriched_jobs: List[EnrichedJob] = field(default_factory=list)
+    error: Optional[str] = None
 
 
 def enrich_audit_result(result: AuditResult) -> EnrichedAuditResult:
-    """Attach schedule descriptions to every job in an AuditResult."""
-    enriched: List[EnrichedJob] = [
-        EnrichedJob(job=job, schedule=describe_schedule(job))
-        for job in (result.jobs or [])
+    """Attach schedule summaries to each job in an AuditResult."""
+    if not result.success or result.jobs is None:
+        return EnrichedAuditResult(
+            host=result.host,
+            success=False,
+            error=result.error,
+        )
+
+    enriched_jobs = [
+        EnrichedJob(job=job, schedule_summary=describe_schedule(job))
+        for job in result.jobs
     ]
     return EnrichedAuditResult(
         host=result.host,
-        success=result.success,
-        enriched_jobs=enriched,
-        error=result.error,
+        success=True,
+        enriched_jobs=enriched_jobs,
     )
 
 
-def _format_enriched_job(ej: EnrichedJob) -> List[str]:
-    """Render a single EnrichedJob as a list of indented report lines."""
-    lines = [
-        f"  Command : {ej.job.command}",
-        f"  Schedule: {ej.schedule.raw}",
-        f"  Meaning : {ej.schedule.description}",
-    ]
-    if ej.schedule.estimated_runs_per_day is not None:
-        runs = ej.schedule.estimated_runs_per_day
-        lines.append(f"  Est. runs/day: {runs:.1f}")
-    lines.append("")
-    return lines
+def _format_enriched_job(ej: EnrichedJob) -> str:
+    summary = ej.schedule_summary
+    if summary:
+        schedule_str = f"{summary.expression} ({summary.human_readable}, ~{summary.estimated_runs_per_day}/day)"
+    else:
+        schedule_str = "unknown schedule"
+    return f"  {schedule_str}\n    cmd: {ej.job.command}"
 
 
-def format_enriched_report(results: List[EnrichedAuditResult]) -> str:
-    """Render enriched audit results as a human-readable text report."""
-    lines: List[str] = []
+def format_enriched_report(enriched: EnrichedAuditResult) -> str:
+    """Render an EnrichedAuditResult as a human-readable report string."""
+    lines = [f"Host: {enriched.host}"]
+    if not enriched.success:
+        lines.append(f"  ERROR: {enriched.error}")
+        return "\n".join(lines)
 
-    for result in results:
-        lines.append(f"=== Host: {result.host} ===")
-        if not result.success:
-            lines.append(f"  ERROR: {result.error}")
-            lines.append("")
-            continue
+    if not enriched.enriched_jobs:
+        lines.append("  No cron jobs found.")
+        return "\n".join(lines)
 
-        if not result.enriched_jobs:
-            lines.append("  No cron jobs found.")
-            lines.append("")
-            continue
-
-        for ej in result.enriched_jobs:
-            lines.extend(_format_enriched_job(ej))
-
+    lines.append(f"  {len(enriched.enriched_jobs)} job(s) found:")
+    for ej in enriched.enriched_jobs:
+        lines.append(_format_enriched_job(ej))
     return "\n".join(lines)

@@ -58,6 +58,13 @@ def test_export_json_multiple_hosts():
     assert len(data) == 2
 
 
+def test_export_json_empty_list():
+    """Exporting an empty list should produce a valid JSON empty array."""
+    result = export_json([])
+    data = json.loads(result)
+    assert data == []
+
+
 # --- CSV ---
 
 def test_export_csv_contains_header():
@@ -76,6 +83,13 @@ def test_export_csv_failure_row():
     result = export_csv([_make_failure()])
     assert "db01" in result
     assert "Connection refused" in result
+
+
+def test_export_csv_empty_list():
+    """Exporting an empty list should still produce a header row."""
+    result = export_csv([])
+    assert "host" in result
+    assert "command" in result
 
 
 # --- Markdown ---
@@ -101,3 +115,10 @@ def test_export_markdown_no_jobs():
     r = AuditResult(host="empty", success=True, jobs=[], error=None)
     result = export_markdown([r])
     assert "No cron jobs found" in result
+
+
+def test_export_markdown_multiple_hosts():
+    """Each host should appear as its own section in the markdown output."""
+    result = export_markdown([_make_success("alpha"), _make_failure("beta")])
+    assert "## Host: alpha" in result
+    assert "## Host: beta" in result

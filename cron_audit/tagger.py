@@ -47,6 +47,11 @@ class TaggingReport:
     def untagged_count(self) -> int:
         return sum(1 for tj in self.tagged_jobs if not tj.has_tags)
 
+    def jobs_with_tag(self, tag: str) -> List[TaggedJob]:
+        """Return all tagged jobs that include the given tag (case-insensitive)."""
+        tag_lower = tag.lower()
+        return [tj for tj in self.tagged_jobs if any(t.lower() == tag_lower for t in tj.tags)]
+
 
 def tag_job(job: CronJob, rules: List[TagRule]) -> TaggedJob:
     """Apply all matching tag rules to a single job."""

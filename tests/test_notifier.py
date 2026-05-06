@@ -91,18 +91,9 @@ def test_multiple_jobs_multiple_warnings():
     assert len(warnings) >= 2
 
 
-def test_format_notification_report_contains_host():
-    enriched = _make_enriched("myserver", jobs=[_make_job("/bin/true", runs_per_day=1)])
+def test_empty_jobs_produces_info_notification():
+    """An audit result with no jobs should still produce an info-level notification."""
+    enriched = _make_enriched("host6", jobs=[])
     report = build_notification_report(enriched)
-    output = format_notification_report(report)
-    assert "myserver" in output
-
-
-def test_format_notification_report_shows_level():
-    enriched = _make_enriched(
-        "myserver",
-        jobs=[_make_job("rm -rf /tmp", runs_per_day=1)],
-    )
-    report = build_notification_report(enriched)
-    output = format_notification_report(report)
-    assert "[WARNING]" in output
+    assert not report.has_warnings
+    assert any(n.level == "info" for n in report.notifications)

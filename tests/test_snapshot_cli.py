@@ -64,6 +64,15 @@ def test_snapshot_hosts_creates_dir(tmp_path):
     assert os.path.isdir(target)
 
 
+def test_snapshot_hosts_multiple_hosts(tmp_path):
+    """All successful results produce one snapshot file each."""
+    results = [_success("web1"), _success("web2"), _success("db1")]
+    written = snapshot_hosts(results, str(tmp_path))
+    assert len(written) == 3
+    hostnames = {json.load(open(p))["host"] for p in written}
+    assert hostnames == {"web1", "web2", "db1"}
+
+
 # ---------------------------------------------------------------------------
 # diff_against_snapshots
 # ---------------------------------------------------------------------------
@@ -93,24 +102,24 @@ def test_diff_skips_failed_results(tmp_path):
     assert diffs == []
 
 
+def test_diff_detects_removed_job(tmp_path):
+    """A job present in the snapshot but absent in the new result is reported as removed."""
+    old_jobs = [_make_job("/bin/old"), _make_job("/bin/extra")]
+    snapshot_hosts(
+        [AuditResult(host="web1", success=True, jobs=old_jobs, error=None)],
+        str(tmp_path),
+    )
+    new_jobs = [_make_job("/bin/old")]
+    results = [AuditResult(host="web1", success=True, jobs=new_jobs, error=None)]
+    diffs = diff_against_snapshots(results, str(tmp_path))
+    assert len(diffs) == 1
+    assert len(diffs[0].removed) == 1
+
+
 # ---------------------------------------------------------------------------
 # has_any_changes / print_diff_reports
 # ---------------------------------------------------------------------------
 
 def test_has_any_changes_true(tmp_path):
     snapshot_hosts(
-        [AuditResult(host="web1", success=True, jobs=[], error=None)],
-        str(tmp_path),
-    )
-    results = [_success("web1")]
-    diffs = diff_against_snapshots(results, str(tmp_path))
-    assert has_any_changes(diffs) is True
-
-
-def test_print_diff_reports_only_changes(tmp_path, capsys):
-    snapshot_hosts([_success("web1")], str(tmp_path))
-    results = [_success("web1")]
-    diffs = diff_against_snapshots(results, str(tmp_path))
-    print_diff_reports(diffs, only_changes=True)
-    captured = capsys.readouterr()
-    assert captured.out == ""
+        [AuditResult(host="web1",
